@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>簽到表</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 20px;
+    }
+    .calendar {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 10px;
+      max-width: 1500px;
+      margin: 20px auto;
+      transition: transform 0.2s;
+    }
+    .day {
+      position: relative;
+      padding: 40px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      background: #f8f9fa;
+      user-select: none;
+      overflow: hidden;
+      font-size: 30px;
+    }
+    .day.checked {
+      font-weight: bold;
+      color: red;
+      border: 2px solid red;
+      animation: stamp 0.4s ease;
+    }
+    .day.disabled {
+      background: #e9ecef;
+      color: #999;
+      cursor: not-allowed;
+    }
+    .stamp {
+      font-size: 50px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    .countdown {
+      position: absolute;
+      top: 5px;
+      right: 5px;
+      font-size: 18px;
+      color: gray;
+    }
+    .comment {
+      position: absolute;
+      bottom: 5px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 15px;
+      color: #666;
+      white-space: nowrap;
+      max-width: 90%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    @keyframes stamp {
+      0% { transform: scale(1.5) rotate(5deg); }
+      100% { transform: scale(1) rotate(0); }
+    }
+    .shake {
+      animation: shake 0.3s;
+    }
+    @keyframes shake {
+      0% { transform: translate(1px, 1px) rotate(0deg); }
+      20% { transform: translate(-1px, -2px) rotate(-1deg); }
+      40% { transform: translate(-3px, 0px) rotate(1deg); }
+      60% { transform: translate(3px, 2px) rotate(0deg); }
+      80% { transform: translate(1px, -1px) rotate(1deg); }
+      100% { transform: translate(0px, 0px) rotate(0deg); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container text-center">
+  <h1 class="mb-4">簽到表</h1>
+  <div class="d-flex justify-content-center align-items-center mb-3">
+    <button class="btn btn-outline-primary me-2" onclick="changeMonth(-1)">《 上個月</button>
+    <h4 id="monthYear" class="m-0"></h4>
+    <button class="btn btn-outline-primary ms-2" onclick="changeMonth(1)">下個月 》</button>
+  </div>
+  <div id="calendar" class="calendar"></div>
+  <button class="btn btn-danger mt-3" onclick="resetMonth()">重置本月簽到</button>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="signModal" tabindex="-1" aria-labelledby="signModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="signModalLabel">簽到設定</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">選擇印章：</label>
+          <div id="stampOptions" class="d-flex flex-wrap gap-2"></div>
+        </div>
+        <div class="mb-3">
+          <label for="commentInput" class="form-label">留言（可選）</label>
+          <input type="text" id="commentInput" class="form-control" placeholder="輸入今日心得或備註">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" onclick="confirmSign()">確定簽到</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const calendar = document.getElementById('calendar');
+  const monthYear = document.getElementById('monthYear');
+  const today = new Date();
+  const examDate = new Date('2025-06-06');
+
+  let currentYear = today.getFullYear();
+  let currentMonth = today.getMonth(); // 0-indexed
+  let selectedDay = null;
+  let selectedStamp = "✔️";
+
+  const stamps = ["✔️", "✍️", "🔥", "💯", "😆", "🎯", "💪"];
+  
+  function getStorageKey(year, month) {
+    return `checkin-${year}-${month}`;
+  }
+
+  function loadCheckedDays(year, month) {
+    return JSON.parse(localStorage.getItem(getStorageKey(year, month)) || '{}');
+  }
+
+  function saveCheckedDays(year, month, days) {
+    localStorage.setItem(getStorageKey(year, month), JSON.stringify(days));
+  }
+
+  function renderCalendar() {
+    calendar.innerHTML = '';
+    monthYear.textContent = `${currentYear}年 ${currentMonth + 1}月`;
+
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+    const firstDayOfWeek = new Date(currentYear, currentMonth, 1).getDay();
+    const checkedDays = loadCheckedDays(currentYear, currentMonth);
+
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      const emptyDiv = document.createElement('div');
+      calendar.appendChild(emptyDiv);
+    }
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayElem = document.createElement('div');
+      dayElem.className = 'day';
+      dayElem.textContent = day;
+
+      const currentDate = new Date(currentYear, currentMonth, day);
+      const diffTime = examDate - currentDate;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      // 比較今天
+      const isPast = currentDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+      if (diffDays >= 0) {
+        const countdown = document.createElement('div');
+        countdown.className = 'countdown';
+        countdown.textContent = `倒數${diffDays}天`;
+        dayElem.appendChild(countdown);
+      }
+
+      if (checkedDays[day]) {
+        markChecked(dayElem, checkedDays[day]);
+      }
+
+      if (isPast) {
+        dayElem.classList.add('disabled');
+      } else {
+        dayElem.addEventListener('click', () => {
+          selectedDay = day;
+          if (checkedDays[day]) {
+            delete checkedDays[day];
+            saveCheckedDays(currentYear, currentMonth, checkedDays);
+            renderCalendar();
+          } else {
+            openModal();
+          }
+        });
+      }
+
+      calendar.appendChild(dayElem);
+    }
+  }
+
+  function markChecked(dayElem, data) {
+    dayElem.classList.add('checked');
+    const stampDiv = document.createElement('div');
+    stampDiv.className = 'stamp';
+    stampDiv.textContent = data.stamp || '✔️';
+    dayElem.appendChild(stampDiv);
+
+    if (data.comment) {
+      const commentDiv = document.createElement('div');
+      commentDiv.className = 'comment';
+      commentDiv.textContent = data.comment;
+      dayElem.appendChild(commentDiv);
+    }
+  }
+
+  function changeMonth(offset) {
+    currentMonth += offset;
+    if (currentMonth < 0) {
+      currentMonth = 11;
+      currentYear--;
+    } else if (currentMonth > 11) {
+      currentMonth = 0;
+      currentYear++;
+    }
+    renderCalendar();
+  }
+
+  function resetMonth() {
+    if (confirm("確定要清除本月所有簽到記錄嗎？")) {
+      localStorage.removeItem(getStorageKey(currentYear, currentMonth));
+      renderCalendar();
+    }
+  }
+
+  function openModal() {
+    const stampOptions = document.getElementById('stampOptions');
+    stampOptions.innerHTML = '';
+    stamps.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-light';
+      btn.textContent = s;
+      btn.onclick = () => {
+        selectedStamp = s;
+        document.querySelectorAll('#stampOptions button').forEach(b => {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-light');
+        });
+        btn.classList.remove('btn-light');
+        btn.classList.add('btn-primary');
+      };
+      stampOptions.appendChild(btn);
+    });
+    selectedStamp = stamps[0]; // default
+    const modal = new bootstrap.Modal(document.getElementById('signModal'));
+    modal.show();
+  }
+
+  function confirmSign() {
+    const commentInput = document.getElementById('commentInput').value;
+    const checkedDays = loadCheckedDays(currentYear, currentMonth);
+    checkedDays[selectedDay] = {
+      stamp: selectedStamp,
+      comment: commentInput
+    };
+    saveCheckedDays(currentYear, currentMonth, checkedDays);
+    const modal = bootstrap.Modal.getInstance(document.getElementById('signModal'));
+    modal.hide();
+    calendar.classList.add('shake');
+    setTimeout(() => calendar.classList.remove('shake'), 300);
+    renderCalendar();
+  }
+
+  renderCalendar();
+</script>
+
+</body>
+</html>
