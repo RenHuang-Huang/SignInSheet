@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>簽到表</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="icon" type="image/png" href="favicon.png">
   <style>
     body {
       padding: 20px;
@@ -87,13 +88,17 @@
 
 <div class="container text-center">
   <h1 class="mb-4">簽到表</h1>
+  <h3 id="globalCountdown" class="text-danger mb-3"></h3>
   <div class="d-flex justify-content-center align-items-center mb-3">
     <button class="btn btn-outline-primary me-2" onclick="changeMonth(-1)">《 上個月</button>
     <h4 id="monthYear" class="m-0"></h4>
     <button class="btn btn-outline-primary ms-2" onclick="changeMonth(1)">下個月 》</button>
   </div>
   <div id="calendar" class="calendar"></div>
-  <button class="btn btn-danger mt-3" onclick="resetMonth()">重置本月簽到</button>
+  <div class="mt-3">
+    <button class="btn btn-warning me-2" onclick="resetAll()">重置所有資料</button>
+    <button class="btn btn-danger" onclick="resetMonth()">重置本月簽到</button>
+  </div>
 </div>
 
 <!-- Modal -->
@@ -122,12 +127,39 @@
   </div>
 </div>
 
+<!-- Exam Date Modal -->
+<div class="modal fade" id="examDateModal" data-bs-backdrop="static" data-bs-keyboard="false" tabindex="-1" aria-labelledby="examDateModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="examDateModalLabel">設定考試日期</h5>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="examDateInput" class="form-label">請選擇你的考試日期：</label>
+          <input type="date" id="examDateInput" class="form-control">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" onclick="saveExamDate()">儲存</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
   const calendar = document.getElementById('calendar');
   const monthYear = document.getElementById('monthYear');
+  const globalCountdown = document.getElementById('globalCountdown');
   const today = new Date();
-  const examDate = new Date('2025-06-06');
+  
+  let examDateStr = localStorage.getItem('examDate');
+  let examDate = null;
+  if (examDateStr) {
+    const [y, m, d] = examDateStr.split('-');
+    examDate = new Date(y, m - 1, d);
+  }
 
   let currentYear = today.getFullYear();
   let currentMonth = today.getMonth(); // 0-indexed
@@ -167,17 +199,18 @@
       dayElem.textContent = day;
 
       const currentDate = new Date(currentYear, currentMonth, day);
-      const diffTime = examDate - currentDate;
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
       // 比較今天
       const isPast = currentDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-      if (diffDays >= 0) {
-        const countdown = document.createElement('div');
-        countdown.className = 'countdown';
-        countdown.textContent = `倒數${diffDays}天`;
-        dayElem.appendChild(countdown);
+      if (examDate) {
+        const diffTime = examDate - currentDate;
+        const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays >= 0) {
+          const countdown = document.createElement('div');
+          countdown.className = 'countdown';
+          countdown.textContent = `倒數${diffDays}天`;
+          dayElem.appendChild(countdown);
+        }
       }
 
       if (checkedDays[day]) {
@@ -275,7 +308,53 @@
     renderCalendar();
   }
 
-  renderCalendar();
+  function updateGlobalCountdown() {
+    if (!examDate) return;
+    const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const diffTime = examDate - todayLocal;
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      globalCountdown.textContent = `距離考試還有 ${diffDays} 天！`;
+    } else if (diffDays === 0) {
+      globalCountdown.textContent = `今天就是考試日！加油！`;
+    } else {
+      globalCountdown.textContent = `考試已結束 ${-diffDays} 天`;
+    }
+  }
+
+  function saveExamDate() {
+    const input = document.getElementById('examDateInput').value;
+    if (!input) return alert('請選擇日期！');
+    localStorage.setItem('examDate', input);
+    const [y, m, d] = input.split('-');
+    examDate = new Date(y, m - 1, d);
+    const modal = bootstrap.Modal.getInstance(document.getElementById('examDateModal'));
+    modal.hide();
+    updateGlobalCountdown();
+    renderCalendar();
+  }
+
+  function resetAll() {
+    const ans = prompt("請輸入 RESET 以清空所有設定及資料：");
+    if (ans === "RESET") {
+      localStorage.clear();
+      location.reload();
+    } else if (ans !== null) {
+      alert("輸入錯誤，重置取消。");
+    }
+  }
+
+  function init() {
+    if (!examDate) {
+      const modal = new bootstrap.Modal(document.getElementById('examDateModal'));
+      modal.show();
+    } else {
+      updateGlobalCountdown();
+      renderCalendar();
+    }
+  }
+
+  init();
 </script>
 
 </body>
